@@ -1,0 +1,55 @@
+version: '3.0'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:17-alpine  # Sử dụng image nhẹ nhất của PostgreSQL
+    container_name: postgres_db  # Tên container dễ nhận diện
+    environment:
+      POSTGRES_USER: postgres    # Tên người dùng PostgreSQL
+      POSTGRES_PASSWORD: postgres # Mật khẩu PostgreSQL
+      POSTGRES_DB: da_postgres   # Tên database khởi tạo
+    ports:
+      - "5432:5432"  # Map cổng PostgreSQL của container với host
+    volumes:
+      - ./init-schemas.sql:/docker-entrypoint-initdb.d/init-schemas.sql  # Tự động chạy script tạo bảng khi khởi động
+    restart: always  # Đảm bảo container tự restart nếu gặp lỗi
+
+  # Airflow Service
+  crawl-data:
+    image: apache/airflow:2.7.2-python3.11  # Image Airflow kèm Python 3.11
+    container_name: airflow_crawler  # Tên container dễ nhận diện
+    build:
+      context: .  # Build từ thư mục hiện tại
+      dockerfile: Dockerfile  # Sử dụng Dockerfile tùy chỉnh
+    environment:
+      AIRFLOW__CORE__LOAD_EXAMPLES: 'False'  # Tắt chế độ tải ví dụ mặc định
+      AIRFLOW__CORE__EXECUTOR: 'LocalExecutor'  # Dùng LocalExecutor cho các tác vụ đa luồng
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: 'postgresql+psycopg2://postgres:postgres@postgres:5432/da_postgres'
+      PYTHONPATH: /opt/airflow/vnwork  # Thêm thư mục custom Python code vào PATH
+    volumes:
+      - ./dags:/opt/airflow/dags  
+      - ./data:/opt/airflow/data 
+      - ./jobsgoscraper:/opt/airflow/jobsgoscraper  
+      - ./requirements.txt:/app/requirements.txt  
+      #- ./careerscraper:/opt/airflow/careerscraper  
+      - ./vnwork:/opt/airflow/vnwork  
+    ports:
+      - "8080:8080"  # Map cổng webserver Airflow
+    depends_on:  # Đảm bảo PostgreSQL khởi động trước
+      - postgres
+    command: >
+      bash -c "
+      airflow db init &&
+      airflow users create --username admin --password admin --firstname ND --lastname Nam --role Admin --email dinhlechh28@gmail.com &&
+      airflow webserver & airflow scheduler
+      "
+    restart: always  # Đảm bảo container tự restart nếu gặp lỗi
+
+# Định nghĩa volumes
+volumes:
+  dags: 
+  data: 
+  jobsgoscraper: 
+  careerscraper: 
+  vnwork:  
